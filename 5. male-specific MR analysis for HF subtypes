@@ -1,0 +1,85 @@
+#### male-specific MR analysis for HF subtypes
+
+## Step 1: male-specific MR analysis for HF subtypes
+## Step 2: FDR correction for male-specific MR results from Step 1
+
+## Step 1:  male-specific MR analysis for HF subtypes
+#male-stratified exposure data 
+exposure <- read_exposure_data(
+  filename ="male_exposure.txt",
+  phenotype_col ="Phenotype",
+  sep = "\t",
+  snp_col = "SNP",
+  beta_col = "Beta",
+  se_col = "Se",
+  effect_allele_col = "Effect_allele",
+  other_allele_col = "Other_allele",
+  eaf_col = "Effect_allele_frequency",
+  pval_col = "P",
+  gene_col = "Gene",
+  samplesize_col = "N"
+)
+
+#male-stratified outcome data 
+outcome_male <- read_outcome_data(
+  snps = exposure_male$SNP,
+  filename = "male_HFrEF.txt",
+  sep = ",",
+  snp_col = "rsid",
+  beta_col = "effect",
+  se_col = "SE",
+  effect_allele_col = "a1",
+  other_allele_col = "a2",
+  eaf_col = "a1_freq",
+  pval_col = "p-value",
+  gene_col = "Gene",
+  samplesize_col = "n"
+)
+
+
+#harmonization
+hardat_HFrEF <- harmonise_data(
+  exposure_dat = male_exposure, 
+  outcome_dat = male_HFrEF
+)
+
+#steiger filtering
+stei_data <- steiger_filtering(hardat_HFrEF)
+
+#MR results
+MR_results_male <- mr(hardat_HFrEF)
+
+## Step 2: FDR correction for male-specific MR results from Step 1
+Q1 <- pairwise[order(pairwise$p_value)]
+unique_tissue<-unique(Q1$tissue)
+length(unique_tissue)
+out1<-as.character()
+out_filePath<-as.character()
+
+for (j in 1:10) 
+{
+  print(unique_tissue[j]);
+  out_filePath[j]=paste("C:\\Users\\Yang\\MR\\FDR\\",unique_tissue[j],".csv") 
+  Q2<-subset(Q1, Q1[, 2] == unique_tissue[j])
+  write.csv(Q2,out_filePath[j])
+}
+
+filelist <- list.files("C:\\Users\\Yang\\MR\\FDR\\male_specific_HFsubtypes")  
+filelist_sampleid <- as.matrix(gsub(".csv","", filelist))
+filelist_sampleid
+files <-  paste("C:\\Users\\\Yang\\MR\\FDR\\male_specific_HFsubtypes\\",filelist,sep="") 
+
+a <- NULL
+for (i in 1:10)
+{
+  new_data<-as.matrix(read.csv(file=files[i]))
+  temp <- as.data.frame(new_data)
+  p = as.numeric(unlist(temp$pval))
+  fdr <- p.adjust(p, method = "fdr", n = length(p))
+  mergedata <- cbind(temp,fdr)
+  a <- rbind(a,mergedata)
+}
+a <- a[,-1]
+write.csv(a,"FDR_HFrEF.csv")
+
+## rerun Steps 1 and 2 after replacing "HFrEF" with "HFpEF" 
