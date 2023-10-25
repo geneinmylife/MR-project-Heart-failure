@@ -1,0 +1,91 @@
+##sex-stratified MR analysis for LVEF
+
+## Step 1: sex-stratified MR analysis for LVEF
+## Step 2: pairwise z-score test for sex-differential MR results from Step 1
+## Step 3: FDR correction for sex-differential MR results from Step 3
+
+## Step 1: sex-stratified MR analysis for LVEF
+#sex-stratified exposure data shared by males and females
+shared_exposure <- read_exposure_data(
+  filename ="shared_exposure.txt",
+  phenotype_col ="Phenotype",
+  sep = "\t",
+  snp_col = "SNP",
+  beta_col = "Beta",
+  se_col = "Se",
+  effect_allele_col = "Effect_allele",
+  other_allele_col = "Other_allele",
+  eaf_col = "Effect_allele_frequency",
+  pval_col = "P",
+  gene_col = "Gene",
+  samplesize_col = "N"
+)
+
+#sex-stratified LVEF outcome data 
+outcome_male <-read_outcome_data(
+  filename ="male_LVEF.txt",
+  sep = "\t",
+  samplesize_col = "N",
+  snp_col = "SNP",
+  beta_col = "BETA",
+  se_col = "SE",
+  effect_allele_col = "ALLELE1",
+  other_allele_col = "ALLELE0",
+  eaf_col = "A1FREQ",
+  pval_col = "P_BOLT_LMM_INF"
+)
+
+#harmonization
+hardat_male <- harmonise_data(
+  exposure_dat = shared_exposure, 
+  outcome_dat = outcome_male
+)
+
+#steiger filtering
+stei_data <- steiger_filtering(hardat_male)
+
+#MR results
+MR_results_male <- mr(hardat_male)
+
+## rerun Step 1 after replacing "male" with "female" 
+
+## Step 2:pairwise z-score test
+pairwise <- marge(MR_results_male,MR_results_female,by="Phenotype")
+pairwise$zscore <- (MR_results_male$beta-MR_results_female$beta)/
+  sqrt((MR_results_male$se)^2+(MR_results_female$se)^2)
+pairwise$p_value=2*pnorm(-abs(pairwise$zscore))
+
+## Step 3: FDR correction for sex-differential MR results from step 3
+Q1 <- pairwise[order(pairwise$pval)]
+unique_tissue<-unique(Q1$tissue)
+length(unique_tissue)
+out1<-as.character()
+out_filePath<-as.character()
+
+for (j in 1:10) 
+{
+  print(unique_tissue[j]);
+  out_filePath[j]=paste("C:\\Users\\Yang\\MR\\FDR\\",unique_tissue[j],".csv") 
+  Q2<-subset(Q1, Q1[, 2] == unique_tissue[j])
+  write.csv(Q2,out_filePath[j])
+}
+
+filelist <- list.files("C:\\Users\\Yang\\MR\\FDR\\sex_stratified_LVEF")  
+filelist_sampleid <- as.matrix(gsub(".csv","", filelist))
+filelist_sampleid
+files <-  paste("C:\\Users\\\Yang\\MR\\FDR\\sex_stratified_LVEF\\",filelist,sep="") 
+
+a <- NULL
+for (i in 1:10)
+{
+  new_data<-as.matrix(read.csv(file=files[i]))
+  temp <- as.data.frame(new_data)
+  p = as.numeric(unlist(temp$pval))
+  fdr <- p.adjust(p, method = "fdr", n = length(p))
+  mergedata <- cbind(temp,fdr)
+  a <- rbind(a,mergedata)
+}
+a <- a[,-1]
+write.csv(a,"FDR_sex_stratified_LVEF.csv")
+
+
