@@ -1,0 +1,224 @@
+####sex-combined MR analysis for HF
+
+## Step 1: sex-combined MR analysis using HF outcome data from HERMES
+## Step 2: sex-combined MR analysis using HF outcome data from GBMI
+## Step 3: Meta analysis to synthesize MR results yielded from step 1 and 2
+## Step 4: FDR correction for meta results yielded from step 3
+## Step 5: sex-stratified MR analysis to evaluate sex-specific effects of causal genes identified in step 4 on HF
+## Step 6: FDR correction for MR results yielded from step 5
+
+
+## Step 1: sex-combined MR analysis using HF outcome data from HERMES
+#exposure data
+exposure_combine <- read_exposure_data(
+  filename ="exposure_combine.txt",
+  phenotype_col ="Phenotype",
+  sep = "\t",
+  snp_col = "SNP",
+  beta_col = "Beta",
+  se_col = "Se",
+  effect_allele_col = "Effect_allele",
+  other_allele_col = "Other_allele",
+  eaf_col = "Effect_allele_frequency",
+  pval_col = "P",
+  gene_col = "Gene",
+  samplesize_col = "N"
+)
+
+#outcome data 
+outcome_HERMES <- extract_outcome_data(
+  snps = exp$SNP,
+  outcomes = 'ebi-a-GCST009541'
+)
+
+#harmonization
+hardat_HERMES <- harmonise_data(
+  exposure_dat = exposure_combine, 
+  outcome_dat = outcome_HERMES
+)
+
+#steiger filtering
+stei_data <- steiger_filtering(hardat_HERMES)
+
+#MR results
+MR_results_HERMES <- mr(hardat_HERMES)
+
+
+## Step 2: sex-combined MR analysis using HF outcome data from GBMI
+#exposure data
+exposure <- read_exposure_data(
+  filename ="exposure_combine.txt",
+  phenotype_col ="Phenotype",
+  sep = "\t",
+  snp_col = "SNP",
+  beta_col = "Beta",
+  se_col = "Se",
+  effect_allele_col = "Effect_allele",
+  other_allele_col = "Other_allele",
+  eaf_col = "Effect_allele_frequency",
+  pval_col = "P",
+  gene_col = "Gene",
+  samplesize_col = "N"
+)
+
+#outcome data
+outcome_GBMI <- read_outcome_data(
+  snps = combined_exp_dat$SNP,
+  filename = "sex-combined_GBMI.txt",
+  sep = "\t",
+  snp_col = "rsid",
+  beta_col = "inv_var_meta_beta",
+  se_col = "inv_var_meta_sebeta",
+  effect_allele_col = "ALT",
+  other_allele_col = "REF",
+  eaf_col = "all_meta_AF",
+  pval_col = "inv_var_meta_p",
+  ncase="N_case",
+  ncontrol="N_ctrl"
+)
+
+#harmonization
+hardat_GBMI <- harmonise_data(
+  exposure_dat = exposure_combine, 
+  outcome_dat = outcome_GBMI
+)
+
+#steiger filtering
+stei_data <- steiger_filtering(hardat_GBMI)
+
+#results
+MR_results_GBMI <- mr(hardat_GBMI)
+
+
+## Step 3: Meta analysis to synthesize MR results yielded from step 1 and 2
+i<-1
+
+for (i in 1:nrow(metadata)){
+  print(i)
+  TE <- NULL
+  seTE <- NULL
+  Pval <- NULL
+  c <- NULL
+  
+  Estimate1 <- metadata$Estimate1[i]
+  Estimate2 <- metadata$Estimate2[i]
+  SE1 <- metadata$SE1[i]
+  SE2 <- metadata$SE2[i]
+  exposure=metadata$exposure[i]
+  
+  meta_results <- metagen(
+    TE = c(Estimate1,Estimate2),
+    seTE = c(SE1,SE2),
+    sm = "")
+  
+  TE=meta_results$TE.common
+  seTE=meta_results$seTE.common
+  Pval=meta_results$pval.common
+  Q=meta_results$Q
+  pval.Q=meta_results$pval.Q
+  I2=meta_results$I2
+  
+  c <- paste0(exposure,",",TE,",",seTE,",",Pval,",",Q,",",pval.Q,",",I2 )
+  
+  print(exposure)
+  
+  result_file=paste("C:\\Users\\Yang\\MR\\meta\\",exposure,".csv") 
+  
+  write.csv(c,result_file)
+}
+
+flies=list.files(pattern = ".csv")
+meta_results<-read.csv(flies[1])
+for(i in 2:length(flies)){
+  meta_results<-bind_rows(meta_results,read.csv(flies[i]))
+}
+meta_results <- meta_results[,-1]
+
+
+## Step 4: FDR correction for meta results yielded from step 3
+Q1 <- meta_results
+unique_tissue<-unique(Q1$tissue)
+length(unique_tissue)
+out1<-as.character()
+out_filePath<-as.character()
+
+for (j in 1:10) 
+{
+  print(unique_tissue[j]);
+  out_filePath[j]=paste("C:\\Users\\Yang\\MR\\FDR\\",unique_tissue[j],".csv") 
+  Q2<-subset(Q1, Q1[, 2] == unique_tissue[j])
+  write.csv(Q2,out_filePath[j])
+}
+
+filelist <- list.files("C:\\Users\\Yang\\MR\\FDR\\sex_combined_HF")  
+filelist_sampleid <- as.matrix(gsub(".csv","", filelist))
+filelist_sampleid
+files <-  paste("C:\\Users\\\Yang\\MR\\FDR\\sex_combined_HF\\",filelist,sep="") 
+
+a <- NULL
+for (i in 1:10)
+{
+  new_data<-as.matrix(read.csv(file=files[i]))
+  temp <- as.data.frame(new_data)
+  p = as.numeric(unlist(temp$pval))
+  fdr <- p.adjust(p, method = "fdr", n = length(p))
+  mergedata <- cbind(temp,fdr)
+  a <- rbind(a,mergedata)
+}
+a <- a[,-1]
+write.csv(a,"FDR_results_sex_combined_HF.csv")
+
+## Step 5: sex-stratified MR analysis to evaluate sex-specific effects of causal genes identified in step 4 on HF
+#sex-stratified exposure data
+male_exposure_selected <- read_exposure_data(
+  filename ="male_exposure_selected.txt",
+  phenotype_col ="Phenotype",
+  sep = "\t",
+  snp_col = "SNP",
+  beta_col = "Beta",
+  se_col = "Se",
+  effect_allele_col = "Effect_allele",
+  other_allele_col = "Other_allele",
+  eaf_col = "Effect_allele_frequency",
+  pval_col = "P",
+  gene_col = "Gene",
+  samplesize_col = "N"
+)
+
+#sex-stratified outcome data from GBMI 
+outcome_male <-read_outcome_data(
+  snps = combined_exp_dat$SNP,
+  filename = "male_HF.txt",
+  sep = "\t",
+  snp_col = "rsid",
+  beta_col = "inv_var_meta_beta",
+  se_col = "inv_var_meta_sebeta",
+  effect_allele_col = "ALT",
+  other_allele_col = "REF",
+  eaf_col = "all_meta_AF",
+  pval_col = "inv_var_meta_p",
+  ncase="N_case",
+  ncontrol="N_ctrl"
+)
+
+
+#harmonization
+hardat_male <- harmonise_data(
+  exposure_dat = male_exposure_selected, 
+  outcome_dat = outcome_male
+)
+
+#steiger filtering
+stei_data <- steiger_filtering(hardat_male)
+
+#results
+MR_results_male <- mr(hardat_male)
+
+## Step 6: FDR correction for MR results yielded from step 5
+MR_results_male<- MR_results_male[order(MR_results_male$pval)]
+fdr <- p.adjust(MR_results_male$pval, method = "fdr", n = length(MR_results_male$pval))
+write.csv(fdr,"FDR_results_male.csv")
+
+##re-run step 5 and 6 after replacing "male" with "female" 
+
+
