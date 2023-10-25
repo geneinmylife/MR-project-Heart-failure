@@ -1,0 +1,103 @@
+## MR analysis testing causal effects of LVEF on HF/HF subtypes
+
+## Step 1: sex-stratified MR analysis testing causal effects of LVEF on HF
+
+#exposure data
+exposure_male <- read_exposure_data(
+  filename ="male_LVEF_exposure.txt",
+  sep = "\t",
+  snp_col = "SNP",
+  beta_col = "BETA",
+  se_col = "SE",
+  effect_allele_col = "ALLELE1",
+  other_allele_col = "ALLELE0",
+  eaf_col = "A1FREQ",
+  pval_col = "P_BOLT_LMM_INF"
+)
+
+##ld clumping
+exposure_male <- clump_data(exposure_male)
+
+#outcome data 
+outcome_male <-read_outcome_data(
+  snps = exposure_male$SNP,
+  filename = "male_HF.txt",
+  sep = "\t",
+  snp_col = "rsid",
+  beta_col = "inv_var_meta_beta",
+  se_col = "inv_var_meta_sebeta",
+  effect_allele_col = "ALT",
+  other_allele_col = "REF",
+  eaf_col = "all_meta_AF",
+  pval_col = "inv_var_meta_p",
+  ncase="N_case",
+  ncontrol="N_ctrl"
+)
+
+#harmonization
+hardat_male <- harmonise_data(
+  exposure_dat = exposure_male, 
+  outcome_dat = outcome_male
+)
+
+#steiger filtering
+stei_data <- steiger_filtering(hardat_male)
+
+#MR results
+MR_results_male <- mr(hardat_male)
+run_mr_presso(hardat_male, NbDistribution = 1000, SignifThreshold = 0.05)
+mr_heterogeneity(hardat_male)
+mr_pleiotropy_test(hardat_male)
+
+## rerun Step 1 after replacing "male" with "female" 
+
+
+## Step 2: MR analysis combining male-specific LVEF and HF subtypes
+#exposure data
+exposure_male <- read_exposure_data(
+  filename ="male_LVEF_exposure.txt",
+  sep = "\t",
+  snp_col = "SNP",
+  beta_col = "BETA",
+  se_col = "SE",
+  effect_allele_col = "ALLELE1",
+  other_allele_col = "ALLELE0",
+  eaf_col = "A1FREQ",
+  pval_col = "P_BOLT_LMM_INF"
+)
+
+##ld clumping
+exposure_male <- clump_data(exposure_male)
+
+# outcome data 
+HFrEF_male <- read_outcome_data(
+  snps = exposure_male$SNP,
+  filename = "male_HFrEF.txt",
+  sep = "\t",
+  snp_col = "rsid",
+  beta_col = "effect",
+  se_col = "SE",
+  effect_allele_col = "a1",
+  other_allele_col = "a2",
+  eaf_col = "a1_freq",
+  pval_col = "p-value",
+  gene_col = "Gene",
+  samplesize_col = "n"
+)
+
+#harmonization
+hardat_male <- harmonise_data(
+  exposure_dat = exposure_male, 
+  outcome_dat = HFrEF_male
+)
+
+#steiger filtering
+stei_data <- steiger_filtering(hardat_male)
+
+#MR results
+MR_results_male <- mr(hardat_male)
+run_mr_presso(hardat_male, NbDistribution = 1000, SignifThreshold = 0.05)
+mr_heterogeneity(hardat_male)
+mr_pleiotropy_test(hardat_male)
+
+## rerun Step 2 after replacing "HFrEF" with "HFpEF" 
